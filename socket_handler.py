@@ -1,7 +1,7 @@
 from asyncio import AbstractEventLoop
 from measurements_handler import MeasurementsHandler
 from enum import Enum
-import asyncio
+import websockets
 
 
 class Command(Enum):
@@ -9,9 +9,7 @@ class Command(Enum):
     END_MEASUREMENTS = "end"
 
 
-SOCKET_HOST = '127.0.0.1'
 SOCKET_PORT = 65432
-CONTENT_MAX_LENGTH = 4096
 
 
 class SocketHandler(object):
@@ -22,22 +20,12 @@ class SocketHandler(object):
         self.measurements_handler = measurements_handler
 
     async def create_socket(self):
-        server = await asyncio.start_server(self.handle_client, SOCKET_HOST, SOCKET_PORT)
-        await server.serve_forever()
+        await websockets.serve(self.handle_client, port=SOCKET_PORT)
 
-    async def handle_client(self, reader, writer):
-        request = None
-        try:
-            while request != 'quit':
-                request = (await reader.read(CONTENT_MAX_LENGTH)).decode('utf8')
-                response = self.process_command(request)
-                writer.write(response.encode('utf8'))
-                await writer.drain()
-        except ConnectionResetError:
-            print("Client disconnected")
-            # Client disconnected
-        finally:
-            writer.close()
+    async def handle_client(self, web_socket, path):
+        request = await web_socket.recv()
+        response = self.process_command(request)
+        await web_socket.send(response)
 
     def process_command(self, command: str) -> str:
         if command == Command.START_MEASUREMENTS.value:
